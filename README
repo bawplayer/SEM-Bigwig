@@ -1,5 +1,5 @@
 # SEM-Bigwig
-The goal of this project is to provide the end-user with a set of tools that handles all the necessary steps in order to communicate the code (and data) securely to the trusted destination machine, and back.
+The goal of this project is to provide the end-user with a set of tools that handles all the necessary steps in order to communicate the code (and data) securely to the destinated Secure Machine, and back.
 
 ### Landlord
 
