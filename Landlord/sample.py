@@ -68,7 +68,7 @@ def dumpLandlordsToFile(srcfile, destfile, conver, overrideDestination=True,
 def main():
 	form = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(levelname)s:%(message)s";\
 	logging.basicConfig(format=form, level=logging.DEBUG)
-	conver = converter.c30
+	conver = converter.c30 # 32-bit
 	logging.debug(str(conver))
 	
 	if len(sys.argv) > 1:
@@ -79,9 +79,10 @@ def main():
 			test1(arg, conver)
 			test2(arg, conver)
 	else:
-		fn = os.path.join("tst", "hw.exe")
-		test1(fn, conver)
-		test2(fn, conver)
+		fname = os.path.join("tst", "tiny.out")
+		if os.path.exists(fname):
+			test1(fname, conver)
+			test2(fname, conver)
 
 if __name__ == "__main__":
 	main()
