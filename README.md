@@ -1,7 +1,7 @@
 # SEM-Bigwig
 The goal of this project is to provide the end-user with a set of tools that handles all the necessary steps in order to communicate the code (and data) securely to the destinated Secure Machine, and back.
 
-In the Secure Machine, the process' memory instance outside the trusted zone is encrypted & signed. *A landlord* stands for a unit of meta-data that corresponds with memory quota of single cacheline. Landlord instances allocated predominantly outside the trusted zone, hence, same restrictions apply.
+In the Secure Machine, process' memory instance outside the trusted zone is encrypted & signed. *A landlord* stands for a unit of meta-data that corresponds with memory quota of single cacheline. Landlord instances are predominantly allocated outside the trusted zone, hence, same restrictions apply.
 
 ## Landlord
 
