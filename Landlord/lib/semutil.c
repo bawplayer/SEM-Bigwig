@@ -420,3 +420,8 @@ static int semUpdateSegmentHeaders(int destfd, pointer_t srcaddr, long seg_bytes
 
 	return 0;
 }
+
+uint8_t semEncryptSingleByte(uint8_t srcbyte, uintptr_t va, uint8_t seed, uint8_t key) {
+	long otp = va + seed + key;
+	return srcbyte ^ (uint8_t)(otp % 256);
+}

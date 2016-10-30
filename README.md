@@ -5,7 +5,7 @@ In the Secure Machine, the process' memory instances outside the trusted zone ar
 
 ## Landlord
 
-The **Landlord** module is aimed to encrypt & sign the source code of a secret program. Currently, the module generates the required signatures for attestation, merging it into the compiled ELF source code.
+The **Landlord module** is aimed to encrypt & sign the source code of a secret program. Currently, the module generates the required signatures for authentication, and manipulates the file header to allocate memory segment to be populated later.
 
 
 To test the module's functionality:

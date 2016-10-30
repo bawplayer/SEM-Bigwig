@@ -457,6 +457,9 @@ class Elfile:
 
 		def _createSignaturesDictFromSource(self,
 			segmentList:typing.List[SegmentMetaDataTupleType]) -> typing.Dict:
+			"""Retrieve strings from source file, and generate a dictionary
+			that contains the source's signature.
+			"""
 			srcStringsDict = dict()
 			for st in segmentList:
 				srcString = elfexmod.retrieveStringFromMappedFile(
@@ -475,7 +478,7 @@ class Elfile:
 				if landlords[addr] is not None:
 					# valid value
 					return
-				# otherwise, value is a dummy
+				# otherwise, current value is dummy and should be replaced with a signature
 				srcAddress = conver.getAddressFromLandlordAddress(addr)
 				srcContent = list()
 				for i in range(cacheline_width):
@@ -496,6 +499,7 @@ class Elfile:
 				for i in range(len(sign)):
 					landlords[addr + i] = sign[i]
 
+			# _createLandlordSignature() starts here:
 			for k in list(landlordsDict):
 				# traverse up the tree (leaves-to-root), using dummy values for signatures
 				for ll in conver.getLandlordBranch(k, 1):
@@ -512,6 +516,7 @@ class Elfile:
 				res.append((smdt.s_addr, smdt.e_addr))
 			return res
 
+		# generateLandlords() starts here, with some type checking
 		if conver is None:
 			raise TypeError("@conver must not be None")
 		if (conver.program_cache_line_size_log != conver.landlord_cache_line_size_log):
@@ -522,12 +527,14 @@ class Elfile:
 		sign_width = conver.signature_size_in_bits // 8
 		landlord_width = 2**conver.landlord_size_log
 
+		# the actual code starts here
 		segmentTupleList = _findConsecutiveAddressses(self) # seqence of type SegmentMetaDataTuple
 		if _checkCachelineOvelapping(_extractAddresses(segmentTupleList), cacheline_width):
 			raise ValueError("Segments overlap")
 		landlordsDict = _createSignaturesDictFromSource(self, segmentTupleList)
 		landlordsDict = _createLandlordSignature(landlordsDict)
 
+		# filter blank landlords
 		return {k:v for k,v in landlordsDict.items() if (v != 0) or not ignoreBlankLandlords}
 		
 #END OF ELFILE CLASS

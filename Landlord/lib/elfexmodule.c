@@ -33,7 +33,8 @@
 =============================================================================
 */
 
-typedef int (*encryptionFunction)(const pointer_t, int, pointer_t, int);
+typedef int (*hashFunction)(const pointer_t, int, pointer_t, int, int);
+typedef uint8_t (*encFunction)(uint8_t, uintptr_t, uint8_t, uint8_t);
 
 static PyObject *ExmodError;
 static PyObject *elfexmod_retrieveStringFromMappedFile(PyObject*, PyObject*);
@@ -49,13 +50,15 @@ static PyObject *elfexmod_trimSections(PyObject*, PyObject*);
 static PyObject *elfexmod_fileHeaderLength(PyObject*, PyObject*);
 static PyObject *elfexmod_nullifyDomains(PyObject*, PyObject*);
 static PyObject *elfexmod_appendLandlords(PyObject*, PyObject*);
+static PyObject *elfexmod_encBytesArray(PyObject*, PyObject*);
 static PyObject *elfexmod_signBytesArray(PyObject*, PyObject*);
 static PyObject *elfexmod_signFile(PyObject*, PyObject*);
-static PyObject *elfexmod_signAux(const char *dataarray, int arraysize, int, int, encryptionFunction);
+static PyObject *elfexmod_signAux(const char *dataarray, int arraysize, int, int, hashFunction);
 static PyObject *elfexmod_isStaticallyLinkedExecutable(PyObject*, PyObject*);
 inline static int py_singleSetToDict(PyObject* dest, const char *src, const char *key, const char *format);
 static char *swap4bytes(char *dest, const char *src);
 static char *swapBytesEndian(char *dest, const char *src, int n);
+inline static int getParityWrapper(const uint8_t *input, int, uint8_t*, int, int);
 
 
 /*
@@ -283,11 +286,16 @@ static PyObject *elfexmod_appendLandlords(PyObject *self, PyObject *args) {
 	return PyBool_FromLong(res);
 }
 
+inline static int getParityWrapper(const uint8_t *input, int inputlen, uint8_t *resultarray, int reslen, int key) {
+	// ignore key
+	return semGetParity(input, inputlen, resultarray, reslen);
+}
+
 PyDoc_STRVAR(signAux_doc,
 "signAux(const cchar*, cint arraysize, cint cacheline_width, cint sign_width) -> bytes\n\n"
 "Arguments are given in C, but returns a Python bytes object.");
 static PyObject *elfexmod_signAux(const char *dataarray, int arraysize, int cacheline_width, int sign_width,
-	encryptionFunction encfunc) {
+	hashFunction hashfunc) {
 	if (!dataarray || (arraysize <= 0) || (cacheline_width <= 0) || (sign_width <= 0)) {
 		PyErr_BadArgument();
 		return NULL;
@@ -302,7 +310,7 @@ static PyObject *elfexmod_signAux(const char *dataarray, int arraysize, int cach
 	int encResult = 0;
 	for (unsigned int i = 0; i < arraysize/cacheline_width; ++i, dataptr += cacheline_width) {
 		/*Fill parityBuffer with the parity calculation of the current cacheline*/
-		if ((encResult = encfunc(dataptr, cacheline_width, parityBuffer, sign_width)) != 0) {
+		if ((encResult = hashfunc(dataptr, cacheline_width, parityBuffer, sign_width, 0)) != 0) {
 			goto elfsgnauxerr;
 		}
 
@@ -361,8 +369,54 @@ static PyObject *elfexmod_signBytesArray(PyObject *self, PyObject *args) {
 	}
 
 	return elfexmod_signAux(PyBytes_AsString(bytesobj), PyBytes_Size(bytesobj),
-		cacheline_width, sign_width, &semGetParity);
+		cacheline_width, sign_width, &getParityWrapper);
 }
+
+PyDoc_STRVAR(encBytesArray_doc,
+"encBytesArray(obj:bytes, key:int, start_va:int=0) -> bytes\n\n"
+"Return the encrypted string.\nAssuming small-endian, and seed=0 for all.");
+static PyObject *elfexmod_encBytesArray(PyObject *self, PyObject *args) {
+	int key, start_va = 0;
+	PyObject *bytesobj = NULL;
+	if (!PyArg_ParseTuple(args, "Oi|i", &bytesobj, &key, &start_va) || \
+		!bytesobj || (start_va < 0)) {
+		PyErr_BadArgument();
+		return NULL;
+	} else if (!PyBytes_Check(bytesobj)) {
+		PyErr_Format(PyExc_TypeError, "content must be of type bytes");
+		return NULL;
+	}
+
+	/* parse to C type*/
+	const char *srcString = PyBytes_AsString(bytesobj);
+	if (srcString == NULL) {
+		return PyErr_NoMemory;
+	}
+	size_t srcLength = PyBytes_Size(bytesobj);
+	if (srcLength <= 0) {
+		return PyErr_NoMemory;
+	}
+/*
+	char *resultString = malloc(sizeof(srcLength));
+	if (resultString == NULL) {
+		return PyErr_NoMemory;
+	}
+*/
+	char resultString[srcLength]; /* Malloc didn't work well */
+	for (int i = 0; i < srcLength; ++i) {
+		resultString[i] = semEncryptSingleByte(srcString[i], start_va + i, 0, key);
+	}
+
+	/* Parse to Pythonic type */
+	PyObject *resobj = PyBytes_FromStringAndSize(resultString, srcLength);
+
+	//free(resultString); // ERROR?
+	if (resobj == NULL) {
+		return PyErr_NoMemory;
+	}
+	return resobj;
+}
+
 
 PyDoc_STRVAR(retrieveStringFromMappedFile_doc,
 "retrieveStringFromMappedFile(self, startOffset:int, length:int = 0) -> bytes\n\n"
@@ -376,7 +430,6 @@ static PyObject *elfexmod_retrieveStringFromMappedFile(PyObject *self, PyObject 
 		((baseaddr = GetElfileUnsignedLongSubVariable(selfobj, "_srcmm", "address")) == 0) || \
 		((mappedSize = GetElfileUnsignedLongSubVariable(selfobj, "_srcmm", "length")) <= 0) || \
 		(startOffset < 0) || (len < 0) || (len + startOffset > mappedSize)) {
-		return PyErr_NoMemory(); // remove
 		PyErr_BadArgument();
 		return NULL;
 	}
@@ -403,7 +456,8 @@ static PyObject *elfexmod_signFile(PyObject *self, PyObject *args) {
 		return NULL;
 	}
 
-	return elfexmod_signAux((char*)srcmm.address, elfFileLength(srcmm.fd), cacheline_width, sign_width, &semGetParity);
+	return elfexmod_signAux((char*)srcmm.address, elfFileLength(srcmm.fd), cacheline_width,
+		sign_width, &getParityWrapper);
 }
 
 PyDoc_STRVAR(markEncrypted_doc,
@@ -737,6 +791,7 @@ static PyMethodDef exmod_methods[] = {
 	{"fileHeaderLength", elfexmod_fileHeaderLength, METH_VARARGS, fileHeaderLength_doc},
 	{"nullifyDomains", elfexmod_nullifyDomains, METH_VARARGS, nullifyDomains_doc},
 	{"appendLandlords", elfexmod_appendLandlords, METH_VARARGS, appendLandlords_doc},
+	{"encBytesArray", elfexmod_encBytesArray, METH_VARARGS, encBytesArray_doc},
 	{"signBytesArray", elfexmod_signBytesArray, METH_VARARGS, signBytesArray_doc},
 	{"signFile", elfexmod_signFile, METH_VARARGS, signFile_doc},
 	{NULL, NULL, 0, NULL}

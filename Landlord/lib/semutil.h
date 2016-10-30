@@ -32,6 +32,9 @@ int semGetEncryptionMagicNumber(const pointer_t addr);
 */
 int semEncryptContentAndSignature(const unsigned long*, uint8_t**, uint8_t**);
 
+
+uint8_t semEncryptSingleByte(uint8_t srcbyte, uintptr_t va, uint8_t seed, uint8_t key);
+
 /**
 	semAppendLandlordsSegment() appends a data segment to a file.
 	Parameters:

@@ -25,7 +25,7 @@
 	char *bufptr = srcptr; \
 	if (endianMismatch && (srcMemberSize > 1)) { \
 		memcpy(reversedFormBuffer, srcptr, srcMemberSize); \
-		reverseBytesOrder(reversedFormBuffer, srcMemberSize); \
+		elfReverseBytesOrder(reversedFormBuffer, srcMemberSize); \
 		bufptr = reversedFormBuffer; \
 	} \
 	if ((srcMemberSize < destMemberSize) && !elfAmILittleEndian()) { \
@@ -54,11 +54,11 @@
 /*
 	Use for endiness mismatch.
 */
-static void reverseBytesOrder(void*, size_t);
+static void elfReverseBytesOrder(void*, size_t);
 
 static inline off_t elfGetFDOffset(const int fd);
 static inline off_t elfSetFDOffset(const int fd, const off_t offset);
-static inline FILE *convertFDtoFILE(const int fd, const char* permit);
+static inline FILE *elfConvertFDtoFILE(const int fd, const char* permit);
 static unsigned long elfGetSegmentHeaderOffsetIndex(const Elf_header *hdr, int idx);
 static inline unsigned int elfGetSegmentHeaderTableEntriesCount(const Elf_header *hdr);
 static int elfCopySegmentsHeaders(const pointer_t, Elf64_Phdr**);
@@ -93,13 +93,13 @@ static int elfGetFileType(const pointer_t addr) {
 
 	unsigned short res = ((Elf_header*)addr)->e_type;
 	if (elfEndinessConflict((Elf64_Ehdr*)addr)) {
-		reverseBytesOrder(&res, sizeof(res));
+		elfReverseBytesOrder(&res, sizeof(res));
 	}
 
 	return res; // cast from unsigned short to integer
 }
 
-static inline FILE *convertFDtoFILE(const int fd, const char* permit) {
+static inline FILE *elfConvertFDtoFILE(const int fd, const char* permit) {
 	if (fd < 0) {
 		return NULL;
 	}
@@ -131,7 +131,7 @@ static unsigned long elfGetSegmentHeaderOffsetIndex(const Elf_header *hdr, int i
 	bool endianMismatch = elfEndinessConflict(hdr);
 	short phnum = flag64bheader? ((Elf64_Ehdr*)hdr)->e_phnum:((Elf32_Ehdr*)hdr)->e_phnum;
 	if (endianMismatch) {
-		reverseBytesOrder(&phnum, sizeof(phnum));
+		elfReverseBytesOrder(&phnum, sizeof(phnum));
 	}
 	if ((idx < 0) || (idx >= phnum)) { // validate idx
 		return 0;
@@ -141,11 +141,11 @@ static unsigned long elfGetSegmentHeaderOffsetIndex(const Elf_header *hdr, int i
 	if (endianMismatch) {
 		if (flag64bheader) {
 			unsigned long _phofftmp = ((Elf64_Ehdr*)hdr)->e_phoff;
-			reverseBytesOrder(&_phofftmp, sizeof(_phofftmp));
+			elfReverseBytesOrder(&_phofftmp, sizeof(_phofftmp));
 			phoff = _phofftmp;
 		} {
 			unsigned int _phofftmp = ((Elf64_Ehdr*)hdr)->e_phoff;
-			reverseBytesOrder(&_phofftmp, sizeof(_phofftmp));
+			elfReverseBytesOrder(&_phofftmp, sizeof(_phofftmp));
 			phoff = _phofftmp;
 		}
 	} else {
@@ -163,7 +163,7 @@ static unsigned long elfGetSegmentHeaderOffsetIndex(const Elf_header *hdr, int i
 	}
 }
 
-static void reverseBytesOrder(void *x, size_t sz) {
+static void elfReverseBytesOrder(void *x, size_t sz) {
 	if (x == NULL) {
 		return;
 	}
@@ -203,7 +203,7 @@ static inline unsigned int elfGetSegmentHeaderTableEntriesCount(const Elf_header
 	}
 
 	if (endianMismatch) {
-		reverseBytesOrder(&res, sizeof(res));
+		elfReverseBytesOrder(&res, sizeof(res));
 	}
 
 	return res;
