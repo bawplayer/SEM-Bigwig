@@ -1,5 +1,5 @@
 /**
-semutil.c
+	semutil.c
 */
 
 #include <stdio.h>
@@ -13,6 +13,11 @@ semutil.c
 #include <stdint.h>
 #include "semutil.h"
 
+/*
+=============================================================================
+                        		MACROS
+=============================================================================
+*/
 
 #define BITS_IN_BYTE (8)
 
@@ -63,6 +68,12 @@ semutil.c
 }
 
 /*
+=============================================================================
+                        		DECLARATIONS
+=============================================================================
+*/
+
+/*
 	semCloneFileSectionTableTrimmedAux()
 	clonemm is an optional parameter.
 */
@@ -76,6 +87,12 @@ static int semUpdateSegmentHeaders(int destfd, pointer_t, long);
 static inline void semSetFDToEnd(const int fd) {
 	lseek(fd, 0, SEEK_END);
 }
+
+/*
+=============================================================================
+                        		IMPLEMENTATIONS
+=============================================================================
+*/
 
 static int semGetParityAux(const uint8_t *input, int len) {
 	if (!input || (len <= 0)) {
@@ -260,7 +277,7 @@ int semGetEncryptionMagicNumber(const pointer_t addr) {
 		return -1;
 	}
 
-	return (*(volatile char*)((uintptr_t)addr + SEM_ENC_MAGIC_NUMBER_OFFSET)==0)? 0:1;
+	return (*(volatile char*)((uintptr_t)addr + SEM_ENC_BIT_HEADER_OFFSET)==0)? 0:1;
 }
 
 int semSetEncryptionMagicNumber(pointer_t addr) {
@@ -269,7 +286,7 @@ int semSetEncryptionMagicNumber(pointer_t addr) {
 	}
 
 	// really??
-	volatile char * const enc_location = (char*)((uintptr_t)addr + SEM_ENC_MAGIC_NUMBER_OFFSET);
+	volatile char * const enc_location = (char*)((uintptr_t)addr + SEM_ENC_BIT_HEADER_OFFSET);
 	char b = *enc_location;
 	*enc_location = 1;
 	return b;

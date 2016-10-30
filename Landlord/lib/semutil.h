@@ -1,5 +1,5 @@
 /**
-semutil.h
+	semutil.h
 */
 
 #ifndef _SEMUTIL_H
@@ -8,7 +8,7 @@ semutil.h
 #include "elfutil.h"
 #include "mmaputil.h"
 
-#define SEM_ENC_MAGIC_NUMBER_OFFSET 8
+#define SEM_ENC_BIT_HEADER_OFFSET 8
 
 /**
 	Creates a new file 	named @clonename, without the section table.
@@ -24,8 +24,7 @@ int semSetEncryptionMagicNumber(pointer_t addr);
 int semGetEncryptionMagicNumber(const pointer_t addr);
 
 /**
-	semEncryptContentAndSignature() - Encrypt the file's content and
-	signatures.
+	Encrypt the file's content and signatures.
 	@PARAM1 - Result of elfGetSegmentsHeadersFromAddress() - Segments' headers
 	@PARAM2 - Result of elfReadSegmentsContent() - Segments' content
 	@PARAM3 - Result of elfSignSegmentsContent() - Segments' content signatures
