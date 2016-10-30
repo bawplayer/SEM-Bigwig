@@ -1,6 +1,6 @@
 /**
 	elfexmodule.c
-	The Python library includes stdio, string, errno, stdlib, assert, limits.
+	The Python library includes: stdio, string, errno, stdlib, assert, limits.
 */
 #include <Python.h> 
 #include <stdbool.h>
@@ -10,9 +10,9 @@
 
 
 /*
-=============================================================
-                           MACROS
-=============================================================
+=============================================================================
+                        		MACROS
+=============================================================================
 */
 #define PAGE_SIZE 4096
 
@@ -28,9 +28,9 @@
 	(PyLong_AsUnsignedLongMask(PyObject_GetAttrString(PyObject_GetAttrString(srcobj, extvar), intvar)))
 
 /*
-=============================================================
-                        DECLARATIONS
-=============================================================
+=============================================================================
+                        		DECLARATIONS
+=============================================================================
 */
 
 typedef int (*encryptionFunction)(const pointer_t, int, pointer_t, int);
@@ -42,7 +42,6 @@ static PyObject *elfexmod_mmapDealloc(PyObject*, PyObject*);
 static PyObject *elfexmod_checkValidity(PyObject*, PyObject*);
 static PyObject *elfexmod_isEncrypted(PyObject*, PyObject*);
 static PyObject *elfexmod_markEncrypted(PyObject*, PyObject*);
-static PyObject *elfexmod_readSegments(PyObject*, PyObject*, PyObject*);
 static PyObject *elfexmod_fileLength(PyObject*, PyObject*);
 static PyObject *elfexmod_readHeader(PyObject*, PyObject*);
 static PyObject *elfexmod_readSegmentsTable(PyObject*, PyObject*);
@@ -60,9 +59,9 @@ static char *swapBytesEndian(char *dest, const char *src, int n);
 
 
 /*
-=============================================================
-                      IMPLEMENTATIONS
-=============================================================
+=============================================================================
+                        		IMPLEMENTATIONS
+=============================================================================
 */
 
 inline static int py_singleSetToDict(PyObject* dest, const char *src, const char *key, const char *format) {
@@ -716,104 +715,11 @@ excrsta0:
 	return PyErr_SetFromErrno(PyExc_MemoryError);
 }
 
-static PyObject *elfexmod_readSegments(PyObject *self, PyObject *args, PyObject *kywrd) {
-	uintptr_t addr = 0;
-	PyObject *py_list = NULL, *selfobj = NULL;
-	bool excludeContent = false, excludeEmpty = false;
-
-	const char *keywords[] = {"self", "excludeByteArray", "excludeEmpty", NULL};
-	if (!PyArg_ParseTupleAndKeywords(args, kywrd, "O|bb", keywords, &selfobj, &excludeContent, &excludeEmpty) || 
-		!selfobj || \
-		((addr = GetElfileUnsignedLongSubVariable(selfobj, "_srcmm", "address")) == 0)
-		) {
-		PyErr_BadArgument();
-		return NULL;
-	}
-
-	/* Allocate and fill array with segments metadata */
-	unsigned long *segmentsHeadArray = NULL;
-	uint8_t **segmentsByteArray = NULL;
-	int segment_count = elfReadSegments( \
-		(pointer_t)addr, \
-		&segmentsHeadArray, \
-		(excludeContent? NULL: &segmentsByteArray) \
-		);
-	if ((segment_count <= 0) || !segmentsHeadArray || (!excludeContent && !segmentsByteArray)) {
-		PyErr_Format(PyExc_IOError, "Read failed");
-		goto exrsegexit;
-	}
-
-	py_list = PyList_New(0);
-	if (py_list == NULL) {
-		PyErr_Format(PyExc_MemoryError, "Allocation failed");
-		goto exrsegbytes;
-	}
-	
-	for (unsigned long i = 0; i < segment_count; ++i) {
-		unsigned long segment_off = segmentsHeadArray[i*ELF_SEG_HEAD_NUM_FIELD];
-		unsigned long segment_va = segmentsHeadArray[i*ELF_SEG_HEAD_NUM_FIELD + 1];
-		size_t segment_sz = segmentsHeadArray[i*ELF_SEG_HEAD_NUM_FIELD + 2];
-		size_t segment_pft = segmentsHeadArray[i*ELF_SEG_HEAD_NUM_FIELD + 3];
-		/* Allocate a tuple of length 5, to contain both metadata and 
-		the segment's data.
-		Pointer of y# argument must not be NULL, or Py_BuildValue() fail. */
-		if (excludeEmpty && (segment_pft == 0)) {
-			continue;
-		}
-
-		PyObject *py_obj_tmp = NULL;
-		if (excludeContent) {
-			py_obj_tmp = Py_BuildValue(
-				"(k,k,k,k)", /* tuple format: 4 unsigned + bytearray*/
-				segment_off, /*offset from file head*/
-				segment_va, /* virtual address */
-				segment_sz, /* size in file */
-				segment_pft /* footprint in process memory */
-			);
-		} else if (segmentsByteArray[i] == NULL) {
-			py_obj_tmp = Py_BuildValue(
-				"(k,k,k,k,y#)", /* tuple format: 4 unsigned + bytearray*/
-				segment_off, /*offset from file head*/
-				segment_va, /* virtual address */
-				segment_sz, /* size in file */
-				segment_pft, /* footprint in process memory */
-				'\0', 0
-			);
-		} else {
-			py_obj_tmp = Py_BuildValue(
-				"(k,k,k,k,y#)", /* tuple format: 4 unsigned + bytearray*/
-				segment_off, /*offset from file head*/
-				segment_va, /* virtual address */
-				segment_sz, /* size in file */
-				segment_pft, /* footprint in process memory */
-				segmentsByteArray[i], segment_sz
-			);
-		}
-
-		if (!py_obj_tmp || PyList_Append(py_list, py_obj_tmp)) {
-			PyErr_Format(PyExc_IOError, "Append failed");
-			goto exrseglist;
-		}
-	}
-
-exrsegbytes:
-	if (segmentsByteArray) {
-		for (unsigned long i=0; i<segment_count; ++i) {
-			free(segmentsByteArray[i]);
-		}
-	}
-	free(segmentsHeadArray);
-exrsegexit:
-	return py_list;
-	//return py_list? py_list : PyErr_NoMemory();
-
-exrseglist:
-	if (py_list) {
-		Py_XDECREF(py_list);
-		py_list = NULL;
-	}
-	goto exrsegbytes;
-}
+/*
+=============================================================================
+                        		Python's C API Code
+=============================================================================
+*/
 
 static PyMethodDef exmod_methods[] = {
 	/* "Python name"   c-func name   argument_repr    desc. */
@@ -826,7 +732,6 @@ static PyMethodDef exmod_methods[] = {
 	{"isEncrypted", elfexmod_isEncrypted, METH_VARARGS, isEncrypted_doc},
 	{"isStaticallyLinkedExecutable", elfexmod_isStaticallyLinkedExecutable, METH_VARARGS, isStaticallyLinkedExecutable_doc},
 	{"markEncrypted", elfexmod_markEncrypted, METH_VARARGS, markEncrypted_doc},
-	{"readSegments", elfexmod_readSegments, METH_VARARGS | METH_KEYWORDS, "Return a tuple with both metadata and data of each segment"},
 	{"trimSections", elfexmod_trimSections, METH_VARARGS, trimSections_doc},
 	{"fileLength", elfexmod_fileLength, METH_VARARGS, fileLength_doc},
 	{"fileHeaderLength", elfexmod_fileHeaderLength, METH_VARARGS, fileHeaderLength_doc},

@@ -7,9 +7,10 @@ module_name = "elfexmod"
 modules_dir = "lib"
 dest_dir = "."
 
-logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
+#logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 module1 = Extension(module_name,
+	#define_macros = [('MAJOR_VERSION', '1'), ('MINOR_VERSION', '0')],
 	include_dirs = [modules_dir],
 	#libraries = ["pthread"],
 	extra_compile_args = ["-std=c11"],

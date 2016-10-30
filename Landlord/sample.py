@@ -22,7 +22,7 @@ def time_deco(func):
 
 @time_deco
 def test1(filename, conver, *, ignoreBlankLandlords=True):
-	"""Calls :py:func:`Elfile.generateLandlords()` to
+	"""Call :py:func:`Elfile.generateLandlords()` to
 	calculate the file's landlords.
 	"""
 	with elfi.Elfile(filename) as fle:

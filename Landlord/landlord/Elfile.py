@@ -194,7 +194,10 @@ class Elfile:
 		"""
 		return elfexmod.isEncrypted(self)
 
-	def trimSections(self, clonename):
+	def trimSectionTable(self, clonename):
+		"""Create a clone to the source ELF file.
+		The section table will be trimmed from the clone.
+		"""
 		elfexmod.trimSections(self, clonename)		
 
 	def encrypt(self, conver, cloneName:typing.Optional[str]=None, *, overwrite:bool=True) -> str:
@@ -224,16 +227,6 @@ class Elfile:
 		if force or (not hasattr(self, "header_dict")) or (self.header_dict is None):
 			self.header_dict = elfexmod.readHeader(self)
 		return self.header_dict
-
-	def readSegmentsContent(self, *, excludeContent:bool=False, excludeEmpty:bool=False):
-		"""| Returns a list of penta-tuples.
-		| 1st Value - offset
-		| 2nd Value - virtual address
-		| 3rd Value - file footprint
-		| 4th Value - memory footprint
-		| 5th Value - content
-		"""
-		return elfexmod.readSegments(self, excludeByteArray=excludeContent, excludeEmpty=excludeEmpty)
 
 	def readSegmentTable(self, *, force:bool=False, excludeEmpty:bool=False) -> typing.List[typing.Dict]:
 		"""Reads the segment table from the file, using
@@ -343,6 +336,7 @@ class Elfile:
 	def findAddressesConflicts(self):
 		"""Returns a list of virtual addresses whom have more than a
 		single byte candidate to occupy it.
+		!TODO: Optimization is required here
 		"""
 		matches = self.matchLineToAddress()
 		conflicts, sofar = list(), list()

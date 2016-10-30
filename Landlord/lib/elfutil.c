@@ -13,7 +13,11 @@
 #include "semutil.h"
 
 
-
+/*
+=============================================================================
+                        		MACROS
+=============================================================================
+*/
 #define ELF_READ_GEN_HEADER_MEMBER(desthdr, mem, srcptr, endianMismatch, src64bitType, type32hdr, type64hdr) do { \
 	size_t srcMemberSize = (src64bitType? MEMBER_SIZE(type64hdr, mem) : MEMBER_SIZE(type32hdr, mem)); \
 	size_t destMemberSize = MEMBER_SIZE(type64hdr, mem); \
@@ -41,13 +45,11 @@
 #define ELF_READ_SEGHEAD_MEMBER(desthdr, mem, srcptr, endianMismatch, src64bitType) \
 	ELF_READ_GEN_HEADER_MEMBER(desthdr, mem, srcptr, endianMismatch, src64bitType, Elf32_Phdr, Elf64_Phdr)
 
-/* Declarations */
-/**
-	getSegmentHeader() returns a pointer of the requested segment.
-	@hdr - Pointer of elf header (the beginning of an executable)
-	@idx - the requested section's index (starts at 0)
+/*
+=============================================================================
+                        		DECLARATIONS
+=============================================================================
 */
-static Elf_offset elfGetSegmentHeaderOffset(const Elf_segment_header*);
 
 /*
 	Use for endiness mismatch.
@@ -59,10 +61,6 @@ static inline off_t elfSetFDOffset(const int fd, const off_t offset);
 static inline FILE *convertFDtoFILE(const int fd, const char* permit);
 static unsigned long elfGetSegmentHeaderOffsetIndex(const Elf_header *hdr, int idx);
 static inline unsigned int elfGetSegmentHeaderTableEntriesCount(const Elf_header *hdr);
-static inline Elf_word elfGetSegmentBaseAddress(const Elf_segment_header *seghdr);
-static inline Elf_word elfGetSegmentSize(const Elf_segment_header *seghdr);
-static inline Elf_word elfGetSegmentMemoryFootprint(const Elf_segment_header *seghdr);
-static inline Elf_offset elfGetSegmentContentOffset(const Elf_segment_header *seghdr);
 static int elfCopySegmentsHeaders(const pointer_t, Elf64_Phdr**);
 static uint8_t **elfReadSegmentsContentAux(const pointer_t, int);
 static bool checkOverlappingAddresses(pointer_t dest, pointer_t src, size_t offset);
@@ -73,6 +71,12 @@ static int elfParseSegmentHeaderTo64Version(Elf64_Phdr * const dest, const point
 extern bool elfCheckValidity(const uint8_t*);
 extern bool elfEndinessConflict(const Elf64_Ehdr*);
 
+
+/*
+=============================================================================
+                        		IMPLEMENTATIONS
+=============================================================================
+*/
 
 static inline off_t elfGetFDOffset(const int fd) {
 	return lseek(fd, 0, SEEK_CUR);
@@ -159,10 +163,6 @@ static unsigned long elfGetSegmentHeaderOffsetIndex(const Elf_header *hdr, int i
 	}
 }
 
-static Elf_offset elfGetSegmentHeaderOffset(const Elf_segment_header *shdr) {
-	return shdr? shdr->p_offset : 0;
-}
-
 static void reverseBytesOrder(void *x, size_t sz) {
 	if (x == NULL) {
 		return;
@@ -207,22 +207,6 @@ static inline unsigned int elfGetSegmentHeaderTableEntriesCount(const Elf_header
 	}
 
 	return res;
-}
-
-static inline Elf_word elfGetSegmentBaseAddress(const Elf_segment_header *seghdr) {
-	return seghdr? seghdr->p_vaddr : 0;
-}
-
-static inline Elf_word elfGetSegmentSize(const Elf_segment_header *seghdr) {
-	return seghdr? seghdr->p_filesz : 0;
-}
-
-static inline Elf_word elfGetSegmentMemoryFootprint(const Elf_segment_header *seghdr) {
-	return seghdr? seghdr->p_memsz : 0;
-}
-
-static inline Elf_offset elfGetSegmentContentOffset(const Elf_segment_header *seghdr) {
-	return seghdr ? seghdr->p_offset : 0;
 }
 
 bool elfAmILittleEndian() {
@@ -384,117 +368,6 @@ Elf_segment_header **elfGetSegmentHeadersPointers(const Elf_header *hdr) {
 	}
 
 	return array;
-}
-
-int elfGetPartialSegmentHeadersFromAddress(pointer_t addr, unsigned long **res) {
-	if (!addr || !res) {
-		return -1;
-	}
-
-	Elf_header *file_elf_header = addr;
-	int segments_count;
-	if (!elfCheckValidity(addr) || \
-		((segments_count = elfGetSegmentHeaderTableEntriesCount(file_elf_header)) <= 0)) {
-		return -1;
-	}
-
-	const unsigned int num_fields = 4;
-	if ((*res = malloc(sizeof(**res) * num_fields * segments_count)) == NULL) {
-		return -1;
-	}
-
-	int seg_num = 0;
-	unsigned long *ptr = *res;
-	for (seg_num = 0; seg_num < segments_count; ++seg_num) {
-		Elf_segment_header *eseg = elfGetSegmentHeaderOffsetIndex(addr, seg_num) + (unsigned long)addr;
-		if (!eseg) {
-			break;
-		}
-		*ptr++ = (unsigned long)elfGetSegmentContentOffset(eseg);
-		*ptr++ = (unsigned long)elfGetSegmentBaseAddress(eseg);
-		*ptr++ = (unsigned long)elfGetSegmentSize(eseg);
-		*ptr++ = (unsigned long)elfGetSegmentMemoryFootprint(eseg);
-	}
-
-	return seg_num * num_fields;
-}
-
-int elfReadSegments(const pointer_t addr, unsigned long **headers, uint8_t ***content) {
-	if (!addr || (!headers && !content)) {
-		return -1;
-	}
-
-	unsigned long *locheaders;
-	int elements_count = elfGetPartialSegmentHeadersFromAddress(addr, &locheaders);
-	if (locheaders == NULL) {
-		return -1;
-	} else if ((elements_count <= 0) || (elements_count%ELF_SEG_HEAD_NUM_FIELD != 0)) {
-		goto elfrssheaders;
-	}
-
-	int segments_count = elements_count/ELF_SEG_HEAD_NUM_FIELD;
-	if (content && ((*content = elfReadSegmentsContentAux(addr, segments_count)) == NULL)) {
-		goto elfrssheaders;
-	}
-
-	if (headers) {
-		*headers = locheaders;
-	} else {
-		free(locheaders);
-	}
-
-	return segments_count;
-elfrssheaders:
-	free(locheaders);
-	return -1;	
-}
-
-static uint8_t **elfReadSegmentsContentAux(const pointer_t addr, int segCount) {
-	if (!addr || (segCount <= 0)) {
-		return NULL;
-	}
-
-	uint8_t **array = malloc(sizeof(*array) * (segCount+1));
-	if (!array) {
-		return NULL;
-	}
-	array[segCount] = NULL; // NULL-terminated array
-
-	Elf_segment_header *segheaders = NULL;
-	if ((elfCopySegmentsHeaders(addr, &segheaders) != 0) || !segheaders) {
-		goto elfrscarray;
-	}
-
-	int i;
-	for (i = 0; i < segCount; ++i) {
-		size_t content_sz = elfGetSegmentSize(segheaders+i);
-		if (content_sz <= 0) {
-			array[i] = NULL;
-			continue;
-		} else if (!(array[i] = malloc(sizeof(**array) * content_sz))) {
-			goto elfrscaloop;
-		}
-
-		pointer_t src_ptr = (elfGetSegmentHeaderOffset(segheaders+i)+(Elf_offset)addr);
-		if (checkOverlappingAddresses(array[i], src_ptr, content_sz)) {
-			//printf("Overlapping addresses: %p %p 0x%x (segment No. %d)\n", array[i], src_ptr, content_sz, i);
-			goto elfrscaloop;
-		}
-		memcpy(array[i], src_ptr, content_sz);
-	}
-	
-	free(segheaders);
-	return array;
-
-elfrscaloop:
-	while (i--) {
-		free(array[i]);
-	}
-elfrschead:
-	free(segheaders);
-elfrscarray:
-	free(array);
-	return NULL;
 }
 
 static bool checkOverlappingAddresses(pointer_t dest, pointer_t src, size_t offset) {

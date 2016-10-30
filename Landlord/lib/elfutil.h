@@ -85,18 +85,6 @@ ssize_t elfFileLength(const int fd);
 int elfGetPartialSegmentHeadersFromAddress(pointer_t addr, unsigned long **res);
 
 /**
-	elfReadSegments() return positve value on success.
-	The value represent the number of segments retrieved.
-	@addr - The address of the begining of the mapped file.
-	@headers - Pointer for the segments headers to be allocated.
-	@content - Pointer for where the segments' content to be allocated.
-	@RETURN - # of segments (should be greater than zero)
-	In order to read only headers, or only content, it's possible to pass
-	NULL as the other argument.
-*/
-int elfReadSegments(const pointer_t, unsigned long **headers, uint8_t ***content);
-
-/**
 	elfGetSegmentHeadersPointers() returns a new null-terminated array of pointers,
 	to the mapped file. Representing the segment headers.
 	The caller has to free the array.
