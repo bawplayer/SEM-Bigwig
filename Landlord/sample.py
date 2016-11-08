@@ -66,24 +66,23 @@ def dumpLandlordsToFile(srcfile, destfile, conver, overrideDestination=True,
 		with open(destfile, 'w') as dest:
 			json.dump(landlordsDict, dest, sort_keys=True, indent=3)
 
-def main():
+def main(*filenames, conver=converter.c30):
 	form = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(levelname)s:%(message)s";\
 	logging.basicConfig(format=form, level=logging.DEBUG)
-	conver = converter.c30 # 32-bit
 	logging.debug(str(conver))
 	
-	if len(sys.argv) > 1:
-		for arg in sys.argv[1:]:
-			if not os.path.isfile(arg):
-				print("Test file {} is not found".format(arg), file=sys.stderr)
-				continue
-			test1(arg, conver)
-			test2(arg, conver)
-	else:
+	if not filenames:
 		fname = os.path.join("tst", "tiny.out")
 		if os.path.exists(fname):
-			test1(fname, conver)
-			test2(fname, conver)
+			filenames = [fname,]
+
+	for arg in filenames:
+		if not os.path.isfile(arg):
+			print("Test file {} is not found".format(arg), file=sys.stderr)
+			continue
+		test1(arg, conver)
+		test2(arg, conver)
+
 
 if __name__ == "__main__":
-	main()
+	main(*sys.argv[1:])

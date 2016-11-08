@@ -336,17 +336,16 @@ class Elfile:
 	def findAddressesConflicts(self):
 		"""Returns a list of virtual addresses whom have more than a
 		single byte candidate to occupy it.
-		!TODO: Optimization is required here
 		"""
 		matches = self.matchLineToAddress()
-		conflicts, sofar = list(), list()
+		conflicts, seenSoFar = set(), set()
 		for v in matches.values():
 			for address in v:
-				if address in sofar:
-					conflicts.append(address)
+				if address in seenSoFar:
+					conflicts.add(address)
 				else:
-					sofar.append(address)
-		return set(conflicts.sort()) if conflicts else set()
+					seenSoFar.add(address)
+		return set(sorted(conflicts)) if conflicts else set()
 
 	def generateLandlords(self, conver, *, ignoreBlankLandlords:bool=True) -> typing.Dict:
 		"""Generates a byte stream with the parity signature of the file.
