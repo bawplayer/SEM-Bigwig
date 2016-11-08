@@ -1,6 +1,6 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
-__author__ = "BARKer"
+__author__ = "bawplayer"
 
 import elfexmod
 from collections import namedtuple

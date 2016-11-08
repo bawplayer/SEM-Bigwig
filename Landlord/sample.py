@@ -1,4 +1,5 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
+#__author__ = "bawplayer"
 # SAMPLE CODE
 # EXECUTE FROM THE TOP DIRECTORY
 

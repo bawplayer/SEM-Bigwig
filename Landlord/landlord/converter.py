@@ -1,3 +1,4 @@
+#__author__ = "bawplayer"
 #landlord converter api
 from sys import stderr
 from collections import namedtuple
