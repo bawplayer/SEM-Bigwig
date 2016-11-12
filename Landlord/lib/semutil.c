@@ -56,13 +56,13 @@
 		seg_bytes_copied, endinessConflictFlag); \
 } while(0)
 
-#define semSegmentHeaderInitVal {\
+#define semSegmentHeaderInitVal(segmaddr, segmlen, datalen) {\
 		.p_type=1, /* type: load */ \
 		.p_offset=0, /*srcfilelength, - offset */ \
-		.p_vaddr=segaddr, /* virtual address*/ \
-		.p_paddr=segaddr, /* physical address - ignored */ \
+		.p_vaddr=segmaddr, /* virtual address*/ \
+		.p_paddr=segmaddr, /* physical address - ignored */ \
 		.p_filesz=datalen, /* file footprint*/ \
-		.p_memsz=((seglen>datalen)? seglen:datalen), /* memory footprint */ \
+		.p_memsz=((segmlen>datalen)? segmlen:datalen), /* memory footprint */ \
 		.p_flags=PF_W | PF_R, /* access permissions */ \
 		.p_align=1 /* page alignment */ \
 }
@@ -323,6 +323,9 @@ static int semAppendLoadSegment(MMAP_tuple srcmm, const char* destname, uintptr_
 	}
 
 	const bool endinessConflictFlag = elfEndinessConflict(srcaddr);
+	if (endinessConflictFlag) {
+		return (-10);
+	}
 
 	Elf64_Ehdr srcHeader64Format;
 	if (elfReadHeaderFromAddress(srcaddr, &srcHeader64Format)) {
@@ -358,8 +361,8 @@ static int semAppendLoadSegment(MMAP_tuple srcmm, const char* destname, uintptr_
 
 	/* Append segment header */
 	size_t srcfilelength = elfFileLength(srcfd);
-	Elf64_Phdr extraelfseghdr64 = semSegmentHeaderInitVal;
-	Elf32_Phdr extraelfseghdr32 = semSegmentHeaderInitVal;	
+	Elf64_Phdr extraelfseghdr64 = semSegmentHeaderInitVal(segaddr, seglen, datalen);
+	Elf32_Phdr extraelfseghdr32 = semSegmentHeaderInitVal(segaddr, seglen, datalen);	
 
 	if ((srcHeader64Format.e_phentsize != sizeof(Elf32_Phdr))
 		&& (srcHeader64Format.e_phentsize != sizeof(Elf64_Phdr))) {
@@ -386,9 +389,16 @@ static int semAppendLoadSegment(MMAP_tuple srcmm, const char* destname, uintptr_
 		close(destfd);
 		return -6;
 	}
-	if ((datalen > 0) && (write(destfd, data, datalen) <= 0)) {
-		close(destfd);
-		return -7;
+
+	if (datalen > 0) {
+		int res = 0;
+		for (unsigned int datalength = datalen; datalength > 0; datalength -= res) {
+			res = write(destfd, data, datalength);
+			if ((res < 0) || ((res == 0) && (datalength != 0))) {
+				close(destfd);
+				return (-7);
+			}
+		}
 	}
 	
 	/* copy permissions */

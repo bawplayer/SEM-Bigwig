@@ -334,18 +334,17 @@ class Elfile:
 		return resdict
 
 	def findAddressesConflicts(self):
-		"""Returns a list of virtual addresses whom have more than a
+		"""Returns a set of virtual addresses which have more than a
 		single byte candidate to occupy it.
 		"""
-		matches = self.matchLineToAddress()
 		conflicts, seenSoFar = set(), set()
-		for v in matches.values():
+		for v in self.matchLineToAddress().values():
 			for address in v:
 				if address in seenSoFar:
 					conflicts.add(address)
 				else:
 					seenSoFar.add(address)
-		return set(sorted(conflicts)) if conflicts else set()
+		return set(sorted(conflicts))
 
 	def generateLandlords(self, conver, *, ignoreBlankLandlords:bool=True) -> typing.Dict:
 		"""Generates a byte stream with the parity signature of the file.
@@ -390,25 +389,26 @@ class Elfile:
 				raise ValueError("File is empty")
 			return res
 
-		def _checkCachelineOvelapping(addresses:typing.List[typing.Tuple[int,int]], cacheline_width:int) -> bool:
+		def _checkSegmentsCachelineSharing(addresses:typing.List[typing.Tuple[int,int]], cacheline_width:int) -> bool:
 			"""Returns False if no two segments share the same cacheline.
 			"""
 			lastUpperBound = 0
-			for low,up in addresses:
+			for bottom,top in addresses:
 				if lastUpperBound == 0:
-					lastUpperBound = up
+					lastUpperBound = top
 					continue
-				if lastUpperBound >= low:
+				if lastUpperBound >= bottom:
 					return True
 				if ((lastUpperBound + 1) % cacheline_width) != 0:
 					#: incmod - increment modulo cacheline_width -1
 					#; e.g. val=16 with cacheline_width=16, turns to 31
 					#: e.g. val=40 with cacheline_width=16, turns to 47
 					incmod = lambda x,m: x + m - ((x%m) + 1)
-					if incmod(lastUpperBound, cacheline_width) >= low:
-						logging.debug("Although, cacheline overlapping, no segments overlapping")
+					if incmod(lastUpperBound, cacheline_width) >= bottom:
+						logging.debug("""Although, cacheline overlapping, no segments overlapping. Segments({},{}) are {}B apart.""".format(
+							lastUpperBound, bottom, bottom-lastUpperBound))
 						return True
-				lastUpperBound = up
+				lastUpperBound = top
 				assert lastUpperBound > 0, 'woops'
 			return False
 
@@ -458,7 +458,15 @@ class Elfile:
 			segmentList:typing.List[SegmentMetaDataTupleType]) -> typing.Dict:
 			"""Retrieve strings from source file, and generate a dictionary
 			that contains the source's signature.
+			Currently, this implementation does not support a scenario in which
+			different segments share the same cacheline. If found valuable,
+			this should be corrected.
 			"""
+			if _checkSegmentsCachelineSharing(_extractAddresses(segmentTupleList), cacheline_width):
+				# We do not allow different segments to share the same cacheline
+				# due to a limitation in the implementation of _createSignaturesDictFromSource().
+				# However, this could\should be corrected if found valuable.
+				raise ValueError("Segments share cacheline")
 			srcStringsDict = dict()
 			for st in segmentList:
 				srcString = elfexmod.retrieveStringFromMappedFile(
@@ -528,8 +536,6 @@ class Elfile:
 
 		# the actual code starts here
 		segmentTupleList = _findConsecutiveAddressses(self) # seqence of type SegmentMetaDataTuple
-		if _checkCachelineOvelapping(_extractAddresses(segmentTupleList), cacheline_width):
-			raise ValueError("Segments overlap")
 		landlordsDict = _createSignaturesDictFromSource(self, segmentTupleList)
 		landlordsDict = _createLandlordSignature(landlordsDict)
 

@@ -32,7 +32,18 @@ int semGetEncryptionMagicNumber(const pointer_t addr);
 */
 int semEncryptContentAndSignature(const unsigned long*, uint8_t**, uint8_t**);
 
-
+/**
+	Xors the source with the sum of va, seed, and key.
+	Whereas the current implementation is quite degenerate,
+	the declaration is supposed to stick around even for more
+	realistic definitions.
+	Parameters:
+		@srcbyte
+		@va - virtual address
+		@seed
+		@key
+		@RETURN - the encrypted byte
+*/
 uint8_t semEncryptSingleByte(uint8_t srcbyte, uintptr_t va, uint8_t seed, uint8_t key);
 
 /**
@@ -44,7 +55,10 @@ uint8_t semEncryptSingleByte(uint8_t srcbyte, uintptr_t va, uint8_t seed, uint8_
 		@data - Segment data
 		@datalen - Segment data length
 		@seglen - Segment memory footprint (meaningful only when >= datalen)
-		@RETURN - Segment offset in the file
+		@RETURN - 0 for success
+	Errors:
+		(-10) - Endiness conflict
+		etc.
 */
 int semAppendLandlordsSegment(MMAP_tuple, const char*, uintptr_t segaddr,
 	const uint8_t *data, unsigned int datalen, unsigned int seglen);

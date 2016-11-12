@@ -2,7 +2,7 @@ CC=gcc
 
 init: clean
 	pip install -r requirements.txt
-	python setup.py build
+	python3 setup.py build
 test:
 	nasm -f elf tst/tiny.asm
 	$(CC) -m32 -s tst/tiny.o -o tst/tiny.out -nostdlib
