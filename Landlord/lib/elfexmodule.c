@@ -1,6 +1,7 @@
 /**
 	elfexmodule.c
 	The Python library includes: stdio, string, errno, stdlib, assert, limits.
+	Author: bawplayer
 */
 #include <Python.h> 
 #include <stdbool.h>

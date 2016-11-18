@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 #__author__ = "bawplayer"
-# SAMPLE CODE
 # EXECUTE FROM THE TOP DIRECTORY
 
-from landlord import Elfile as elfi
+from landlord import elfile as elfi
 from landlord import converter
 import sys
 import os.path

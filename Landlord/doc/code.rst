@@ -3,6 +3,6 @@ Code Documentation
 
 Content:
 
-.. automodule:: Elfile
+.. automodule:: elfile
 	:members:
 	:undoc-members:
