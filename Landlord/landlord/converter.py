@@ -1,19 +1,17 @@
+#landlord converter API
+
 #__author__ = "bawplayer"
-#landlord converter api
+
+#standard library
 from sys import stderr
 from collections import namedtuple
 import typing
 import logging
+import functools
 
 def clog2(x):
 	from math import ceil, log2
 	return ceil(log2(x))
-
-def clog2_func_wrapper(func):
-	def inner(*args, **kwargs):
-		import math
-		return clog2(func(*args, **kwargs))
-	return inner
 
 def isninstance(x, t) -> bool:
 	"""Return is either equivalent to None, or instance of type t
@@ -22,11 +20,13 @@ def isninstance(x, t) -> bool:
 
 def relaxhex(x:int, glimit:int=100) -> str:
 	"""relaxhex() is a relaxed version of hex(),
-	it translates only values greater than @glimit.
+	it translates only values greater(-equal) than @glimit.
 	"""
 	return hex(x) if x>=glimit else str(x)
 
 def isPowerOf2(x:int) -> bool:
+	if x is None:
+		raise TypeError()
 	if not isinstance(x, int):
 		return False
 	while (x > 0):
@@ -36,14 +36,17 @@ def isPowerOf2(x:int) -> bool:
 	return False
 
 
+
 class LandlordConverter():
 	LandlordCoordinates = namedtuple("LandlordCoordinates", ["segment_offset", "layer_number", "rel_index", "address"])
 	LandlordCoorType = typing.NewType("LandlordCoorType", LandlordCoordinates)
 
 	class InvalidAddressError(TypeError):
-		def __init__(self, message="", addr:int=0):
+		def __init__(self, message:str="", addr=0):
 			super().__init__(message)
 			self.addr = addr
+
+	AddressType = typing.NewType("AddressType", int)
 
 	def __str_hr_log(log2_x:int) -> str:
 		"""Convert integer to human readable string.
@@ -81,45 +84,45 @@ class LandlordConverter():
 			else self.landlord_cache_line_size_log
 		return (addr % 2**self.program_cache_line_size_log) == 0
 
-	def isValidAddress(self, addr:int, *, performIsAlignedCheck:bool=False) -> bool:
+	def isValidAddress(self, addr:AddressType, *, performIsAlignedCheck:bool=False) -> bool:
 		"""isValidAddress() returns True if address is within the given domain.
 		A valid address could be any byte within the domain.
 		"""
 		if (not isinstance(addr, int)) or (addr < 0):
-			raise TypeError("@addr ({}) must be natural integer".format(addr))
+			raise InvalidAddressError("@addr ({}) must be natural integer".format(addr))
 		if performIsAlignedCheck:
 			if not isAddressAligned(addr):
 				return False
 		return (addr < 2**self.domain_log)
 
-	def _isKernelAddress(self, addr:int) -> bool:
+	def _isKernelAddress(self, addr:AddressType) -> bool:
 		if self.kernel_base_addr is None:
 			# No dedicated kernel segment
 			return False
 		return self.isValidAddress(addr) and (addr >= self.kernel_base_addr)
 
-	def _isDataAddress(self, addr:int) -> bool:
+	def _isDataAddress(self, addr:AddressType) -> bool:
 		return (
 				(addr < self.landlord_base_ptr) or
 				(addr >= self.landlord_base_ptr + self.tree_size)
 			) and (addr < 2**self.domain_log) and \
 			not self._isKernelAddress(addr)
 
-	def isValidDataAddress(self, addr:int) -> bool:
+	def isValidDataAddress(self, addr:AddressType) -> bool:
 		return self.isValidAddress(addr) and self._isDataAddress(addr)
 
-	def isValidLandlordAddress(self, addr:int) -> bool:
+	def isValidLandlordAddress(self, addr:AddressType) -> bool:
 		return self.isValidAddress(addr) and \
 			not self._isDataAddress(addr) and \
 			not self._isKernelAddress(addr)
 
-	def _dataCachelineAlign(self, addr:int) -> bool:
+	def _dataCachelineAlign(self, addr:AddressType) -> bool:
 		return addr & -(2**self.program_cache_line_size_log)
 
-	def _landlordCachelineAlign(self, addr:int) -> bool:
+	def _landlordCachelineAlign(self, addr:AddressType) -> bool:
 		return addr & -(2**self.landlord_cache_line_size_log)
 
-	def _isCachelineAligned(self, addr:int) -> bool:
+	def _isCachelineAligned(self, addr:AddressType) -> bool:
 		if self.isValidDataAddress(addr):
 			return self._dataCachelineAlign(addr)
 		elif self.isValidLandlordAddress(addr):
@@ -129,7 +132,7 @@ class LandlordConverter():
 	def __init__(self, domain_log:int, alpha_ll_max_size_in_bytes:int,
 		cache_line_size_log:int, landlord_size_log:int=2,
 		signature_size_in_bits:typing.Optional[int] = None,
-		*, ll_base_ptr:int=0, kernel_base_addr:typing.Optional[int]=None):
+		*, ll_base_ptr:AddressType=0, kernel_base_addr:typing.Optional[int]=None):
 		"""By default, signature size is set to program_cacheline_size//8.
 		Argument cache_line_size_log sets both program cache and landlord cache
 		line-size, in order te ease the class's implementation.
@@ -199,25 +202,26 @@ class LandlordConverter():
 			raise ValueError("signature size ({}b) is too small".format(self.signature_size_in_bits))
 
 	def __str__(self) -> str:
-		strlist = list()
-		strlist.append("Effective domain range is: {}".format(LandlordConverter.__str_hr(2**self.domain_log - self.tree_size)))
+		strargs = list()
+		strargs.append("Effective domain range is: {}".format(LandlordConverter.__str_hr(2**self.domain_log - self.tree_size)))
 		if (self.program_cache_line_size_log != self.landlord_cache_line_size_log):
-			strlist.append("Data cache line size: {} bytes".format(2**self.program_cache_line_size_log))
-			strlist.append("Landlord cache line size: %s bytes" % (2**self.landlord_cache_line_size_log))
+			strargs.append("Data cache line size: {} bytes".format(2**self.program_cache_line_size_log))
+			strargs.append("Landlord cache line size: %s bytes" % (2**self.landlord_cache_line_size_log))
 		else:
-			strlist.append("Data & Landlord cache line size: {}".format(
+			strargs.append("Data & Landlord cache line size: {}".format(
 				LandlordConverter.__str_hr_log(self.program_cache_line_size_log)))
 		if (self.landlord_base_ptr != 0):
-			strlist.append("Landlord pointer is: {}".format(hex(self.landlord_base_ptr)))
-		strlist.append("Alpha-landlord layer size is: " + LandlordConverter.__str_hr_log(clog2(self.getAlphaLayerSize())))
-		strlist.append("Tree size is: {} bytes ({})".format(self.tree_size, LandlordConverter.__str_hr(self.tree_size)))
-		strlist.append("Single landlord width is: {tot} bits\n(lower {sig} for signature, and higher {non} nonce)".format(
+			strargs.append("Landlord pointer is: {}".format(hex(self.landlord_base_ptr)))
+		strargs.append("Alpha-landlord layer size is: " + LandlordConverter.__str_hr_log(clog2(self.getAlphaLayerSize())))
+		strargs.append("Tree size is: {} bytes ({})".format(self.tree_size, LandlordConverter.__str_hr(self.tree_size)))
+		strargs.append("Single landlord width is: {tot} bits\n(lower {sig} for signature, and higher {non} nonce)".format(
 			tot = (8 * (2**self.landlord_size_log)),
 			sig = self.signature_size_in_bits,
 			non = (8 * (2**self.landlord_size_log)) - self.signature_size_in_bits))
-		strlist.append("Landlords per cache line: {}".format(2**self.landlord_cache_line_capacity_log))
-		return "\n".join(strlist)
+		strargs.append("Landlords per cache line: {}".format(2**self.landlord_cache_line_capacity_log))
+		return "\n".join(strargs)
 
+	@functools.lru_cache(maxsize=None)
 	def _getLandlordLayerSize(self, layerIndex:int, domain_log:typing.Optional[int]=None) -> int:
 		"""Returns the i-th landlord layer's memory footprint.
 		"""
@@ -255,7 +259,7 @@ class LandlordConverter():
 			ll_leaves = self._getLandlordLayerSize(layersCount, domain_log)
 		return layersCount + 1
 
-	def getAddressFromLandlordAddress(self, addr:int):
+	def getAddressFromLandlordAddress(self, addr:AddressType) -> AddressType:
 		"""Reversed form of :py:func:`getLandlordIndex()`
 		addr - the landlord address.
 		Returns the lowest address of the corresponding resident
@@ -268,7 +272,7 @@ class LandlordConverter():
 		# addr &= -(2**self.landlord_cache_line_size_log) # cache align
 		addr -= self.landlord_base_ptr
 
-		for layerIndex in range(self._calcLandlordLayersCount()):
+		for layerIndex in range(self.landlordLayersCount):
 			layerSize = self._getLandlordLayerSize(layerIndex)
 			if (addr >= layerSize):
 				addr -= layerSize
@@ -306,7 +310,7 @@ class LandlordConverter():
 		bindx = (ll_address - self.landlord_base_ptr) >> self.landlord_size_log
 		return LandlordConverter.LandlordCoordinates( bindx, layer+1, indx, ll_address )
 			
-	def getLandlordIndex(self, addr:int) -> LandlordCoorType:
+	def getLandlordIndex(self, addr:AddressType) -> LandlordCoorType:
 		"""Returns a tuple: <Index, ABS(Index), Layer, Landlord_address>
 		"""
 		if not self.isValidAddress(addr):
@@ -320,16 +324,24 @@ class LandlordConverter():
 		indx = relative_address >> self.program_cache_line_size_log
 		return LandlordConverter.LandlordCoordinates( indx , 0 , indx, (self.landlord_base_ptr + (indx << self.landlord_size_log)) )
 
-	def getLandlordBranch(self, addr:int, len:int=1):
-		"""Return a generator.
+	def getLandlordBranch(self, addr:AddressType, n:int=None) -> typing.Generator[LandlordCoorType, None, None]:
+		"""When called with @n=1, yields the Landlord Coordinates of the current address.
 		"""
-		layer = (-1)
-		while (layer < self.landlordLayersCount - 1):
-			co = self.getLandlordIndex(co.address if (layer >= 0) else addr)
-			layer = co.layer_number # positive integer
+		if (n is not None) and ((not isinstance(n, int)) or (n <= 0)):
+			raise TypeError()
+		# Initiate @co with dummy values: layer=(-1), address=@addr
+		co = LandlordConverter.LandlordCoordinates(None, (-1), None, addr)
+		while (co.layer_number < self.landlordLayersCount - 1):
+			co = self.getLandlordIndex(co.address)
 			yield co
 
-	def getRandomAddress(self, *, notLandlord:bool=True):
+			# another condition of the while loop
+			if n is not None:
+				n -= 1
+				if n <= 0:
+					break
+
+	def getRandomAddress(self, *, notLandlord:bool=True) -> AddressType:
 		"""Chooses a random valid address, using the python
 		library's :py:func:`random.randrange`.
 		"""
@@ -420,6 +432,7 @@ class LandlordConverter():
 
 #end of class LandlordConverter
 
+LLConvType = typing.NewType("LLConvType", LandlordConverter)
 
 c30 = LandlordConverter(30, 2**6, 5, 1, 8, ll_base_ptr=0x20000000) # 32-bit address
 c39 = LandlordConverter(39, 2**6, 6, 2, 16, ll_base_ptr=0x200000000) # 64-bit address

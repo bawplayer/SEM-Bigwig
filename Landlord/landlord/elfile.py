@@ -1,13 +1,16 @@
-#!/usr/bin/env python3
-
+# elfile.py
 __author__ = "bawplayer"
 
-import elfexmod
+# standard library
 from collections import namedtuple
 import typing
 from enum import IntEnum
 import logging
+from contextlib import suppress
 from sys import stderr
+
+import elfexmod
+from landlord import converter
 
 
 def getEnumNameMatch(enumclass, val):
@@ -84,7 +87,7 @@ class Elfile:
 			raise ValueError("argument is too short")
 		return barray[:4] == mnumber
 
-	def signContent(content:bytes, *, cacheline_width = 16, sign_width = 1, padContent:bool = False) -> bytes:
+	def signContent(content:bytes, cacheline_width = 16, sign_width = 1, *, padContent:bool = False) -> bytes:
 		"""Return byte array with the corresponding parity bits.
 		The expected result's length is calculated: len(content)*sign_width/cacheline_width
 		"""
@@ -113,16 +116,12 @@ class Elfile:
 		self.segments_table = None
 
 	def __del__(self):
-		try:
+		with suppress(AttributeError):
 			if self._srcmm:
 				del(self._srcmm) # must come first
-		except AttributeError:
-			pass
-		try:
+		with suppress(AttributeError):
 			if self._srcfile:
 				self._srcfile.close()
-		except AttributeError:
-			pass
 
 	def __enter__(self):
 		return self
@@ -144,8 +143,9 @@ class Elfile:
 				return "Shared library"
 			else:
 				return getEnumNameMatch(Elfile.FileTypes, hdrdict["type"])
+
 		strargs = list()
-		try:
+		with suppress(Exception):
 			strargs.append(basename(self.srcfilename))
 			hdrdict = self.readHeader()
 			strargs[0] += " ({})".format(_getFileTypeStr(hdrdict["type"]))
@@ -163,8 +163,6 @@ class Elfile:
 					strargs.append("Linkage type: {}".format(
 						"Static" if self.isStaticallyLinkedExec() else "Dynamic")
 					)
-		except:
-			pass
 		return "\n".join(strargs)
 
 	def __bool__(self):
@@ -240,10 +238,7 @@ class Elfile:
 				raise ValueError("file has no segment table")
 			self.segments_table = elfexmod.readSegmentsTable(self,
 				self.header_dict["endiness"].lower() == "little")
-		if not excludeEmpty:
-			return self.segments_table
-		else:
-			return [s for s in self.segments_table if s["memorysize"]>0]
+		return [s for s in self.segments_table if (not excludeEmpty) or (s["memorysize"]>0)]
 
 	def readSegmentHeaders(self, *, excludeEmpty:bool=False) -> typing.List[ElfSegHeaderType]:
 		"""Using :py:func:`readSegmentTable`.
@@ -296,7 +291,7 @@ class Elfile:
 		"""
 		from collections import namedtuple
 		Domain = namedtuple("Domain", ["base", "size"])
-		def _groupInDomains(offsets:List[int]):
+		def _groupInDomains(offsets:typing.List[int]):
 			domains = []
 			currBase, currLength = 0,0
 			elementsCount = 0
@@ -311,9 +306,9 @@ class Elfile:
 			if currLength > 0:
 				domains.append(Domain(self._srcmm.address+currBase, currLength))
 			return domains
-		notmapped = list()
 		matches = self.matchLineToAddress()
 		headerTotalSize = self.headerTotalSize()
+		notmapped = list() 
 		for k,v in matches.items():
 			if k < headerTotalSize:
 				# never remove header
@@ -324,16 +319,12 @@ class Elfile:
 		notmapped.sort()
 		elfexmod.nullifyDomains(_groupInDomains(notmapped))
 
-	def findBytesConflicts(self):
-		"""Returns only lines that are mapped for more than a single address.
+	def findBytesConflicts(self) -> typing.Dict[int, int]:
+		"""Filters addresses that are mapped for more than a single address.
 		"""
-		resdict = {}
-		for k,v in self.matchLineToAddress().items():
-			if len(v) > 1:
-				resdict[k] = v # insert to resdict
-		return resdict
+		return {k:v for k,v in self.matchLineToAddress().items() if len(v)>1}
 
-	def findAddressesConflicts(self):
+	def findAddressesConflicts(self) -> typing.Set[int]:
 		"""Returns a set of virtual addresses which have more than a
 		single byte candidate to occupy it.
 		"""
@@ -344,9 +335,9 @@ class Elfile:
 					conflicts.add(address)
 				else:
 					seenSoFar.add(address)
-		return set(sorted(conflicts))
+		return conflicts
 
-	def generateLandlords(self, conver, *, ignoreBlankLandlords:bool=True) -> typing.Dict:
+	def generateLandlords(self, conver:converter.LLConvType, *, ignoreBlankLandlords:bool=True) -> typing.Dict:
 		"""Generates a byte stream with the parity signature of the file.
 		See: :py:func:`semGetParity`
 		Returns an iterator to a dictionary.
@@ -507,21 +498,18 @@ class Elfile:
 					landlords[addr + i] = sign[i]
 
 			# _createLandlordSignature() starts here:
-			for k in list(landlordsDict):
+			for k in list(landlordsDict): # copy the keys of the dictionary
 				# traverse up the tree (leaves-to-root), using dummy values for signatures
-				for ll in conver.getLandlordBranch(k, 1):
-					if ll.address not in landlordsDict:
-						landlordsDict[ll.address] = None
+				for llco in conver.getLandlordBranch(k):
+					if llco.address not in landlordsDict:
+						landlordsDict[llco.address] = None
 			for k in list(landlords):
 				# traverse the opposite direction to fill with valid signatures
 				_createLandlordSignatureAux(k)
 			return landlords
 
 		def _extractAddresses(segList:typing.List[SegmentMetaDataTuple]) -> typing.List[typing.Tuple[int,int]]:
-			res = list()
-			for smdt in segList:
-				res.append((smdt.s_addr, smdt.e_addr))
-			return res
+			return [(smdt.s_addr, smdt.e_addr) for smdt in segList]
 
 		# generateLandlords() starts here, with some type checking
 		if conver is None:
@@ -534,12 +522,12 @@ class Elfile:
 		sign_width = conver.signature_size_in_bits // 8
 		landlord_width = 2**conver.landlord_size_log
 
-		# the actual code starts here
+		# the actual logic starts here
 		segmentTupleList = _findConsecutiveAddressses(self) # seqence of type SegmentMetaDataTuple
 		landlordsDict = _createSignaturesDictFromSource(self, segmentTupleList)
 		landlordsDict = _createLandlordSignature(landlordsDict)
 
 		# filter blank landlords
-		return {k:v for k,v in landlordsDict.items() if (v != 0) or not ignoreBlankLandlords}
+		return {k:v for k,v in landlordsDict.items() if (not ignoreBlankLandlords) or (v != 0)}
 		
 #END OF ELFILE CLASS

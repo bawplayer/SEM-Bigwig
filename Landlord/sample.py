@@ -2,11 +2,14 @@
 #__author__ = "bawplayer"
 # EXECUTE FROM THE TOP DIRECTORY
 
-from landlord import elfile as elfi
-from landlord import converter
+# standard library
 import sys
 import os.path
 import logging
+import typing
+
+from landlord import elfile as elfi
+from landlord import converter
 
 def time_deco(func):
 	from functools import wraps
@@ -21,7 +24,7 @@ def time_deco(func):
 	return td_wrapper
 
 @time_deco
-def test1(filename, conver, *, ignoreBlankLandlords=True):
+def test1(filename, conver:converter.LLConvType, *, ignoreBlankLandlords:bool=True):
 	"""Call :py:func:`Elfile.generateLandlords()` to
 	calculate the file's landlords.
 	"""
@@ -41,7 +44,7 @@ def test1(filename, conver, *, ignoreBlankLandlords=True):
 		print("""----------------------------------------------""")
 
 @time_deco
-def test2(filename, conver):
+def test2(filename, conver:converter.LLConvType):
 	"""Call :py:func:`Elfile.encrypt`.
 	"""
 	with elfi.Elfile(filename) as fle:
@@ -49,8 +52,8 @@ def test2(filename, conver):
 			print("Successfully cloned to: {}".format(fle.encrypt(conver)))
 
 @time_deco
-def dumpLandlordsToFile(srcfile, destfile, conver, overrideDestination=True,
-	*, ignoreBlankLandlords=True):
+def dumpLandlordsToFile(srcfile, destfile, conver:converter.LLConvType,
+	overrideDestination:bool=True, *, ignoreBlankLandlords:bool=True):
 	"""Dump the landlords addresses and values using JSON.
 	By default, overrides destfile when exists.
 	"""
