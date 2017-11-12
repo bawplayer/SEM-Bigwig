@@ -1,7 +1,7 @@
 #Python C API
 from distutils.core import setup, Extension
-import os
 import logging
+import os
 
 module_name = "elfexmod"
 modules_dir = "lib"
@@ -15,7 +15,13 @@ module1 = Extension(module_name,
 	#libraries = ["pthread"],
 	extra_compile_args = ["-std=c11"],
 	extra_link_args = ["-Wl,-wrap,malloc -Wl,-wrap,realloc -Wl,-wrap,free"],
-	sources = [os.path.join(modules_dir, mod) for mod in ["elfexmodule.c", "elfutil.c", "semutil.c", "mmaputil.c", "malloc_wrapper.c"]]
+	sources = [os.path.join(modules_dir, mod) for mod in [
+		"elfexmodule.c",
+		"elfutil.c",
+		"semutil.c",
+		"mmaputil.c",
+		"malloc_wrapper.c",
+		]]
 )
 
 setup(name = "ELFModule",

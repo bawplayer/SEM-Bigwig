@@ -1,21 +1,18 @@
 #landlord converter API
+__author__ = "bawplayer"
 
-#__author__ = "bawplayer"
-
-#standard library
-from sys import stderr
 from collections import namedtuple
-import typing
-import logging
 import functools
+import logging
+from sys import stderr
+import typing
 
 def clog2(x):
 	from math import ceil, log2
 	return ceil(log2(x))
 
 def isninstance(x, t) -> bool:
-	"""Return is either equivalent to None, or instance of type t
-	"""
+	"""Return is either equivalent to None, or instance of type t"""
 	return (x is None) or isinstance(x, t)
 
 def relaxhex(x:int, glimit:int=100) -> str:
@@ -36,9 +33,9 @@ def isPowerOf2(x:int) -> bool:
 	return False
 
 
-
 class LandlordConverter():
-	LandlordCoordinates = namedtuple("LandlordCoordinates", ["segment_offset", "layer_number", "rel_index", "address"])
+	LandlordCoordinates = namedtuple("LandlordCoordinates",
+									 ["segment_offset", "layer_number", "rel_index", "address"])
 	LandlordCoorType = typing.NewType("LandlordCoorType", LandlordCoordinates)
 
 	class InvalidAddressError(TypeError):
@@ -131,31 +128,36 @@ class LandlordConverter():
 
 	def __init__(self, domain_log:int, alpha_ll_max_size_in_bytes:int,
 		cache_line_size_log:int, landlord_size_log:int=2,
-		signature_size_in_bits:typing.Optional[int] = None,
-		*, ll_base_ptr:AddressType=0, kernel_base_addr:typing.Optional[int]=None):
+		signature_size_in_bits:typing.Optional[int]=None,
+		landlord_base_ptr:AddressType=0, kernel_base_addr:typing.Optional[int]=None):
 		"""By default, signature size is set to program_cacheline_size//8.
 		Argument cache_line_size_log sets both program cache and landlord cache
 		line-size, in order te ease the class's implementation.
 		Note that the signature is included within each landlord.
 		signature_size defaults at cacheline-size / 8 (bit per byte)
+		:param domain_log: address width (e.g. 30 for 32bit system)
+		:param alpha_ll_max_size_in_bytes: alpha landlord allocated memory
+		:param cache_line_size_log: cache line size log (e.g. 5, for 32B line), both data and landlord object
+		:param landlord_size_log: landlord size log, defaults to 2, for 4Bytes landlord object
+		:param signature_size_in_bits: signature size per landlord, defaults to 1:8 ratio
+		:param landlord_base_ptr: base landlord block address, defaults to 0
+		:param kernel_base_addr: dedicate kernel code block, specify base address
 		"""
-		if not isinstance(domain_log, int) or not isinstance(ll_base_ptr, int) \
+		if not isinstance(domain_log, int) or not isinstance(landlord_base_ptr, int) \
 			or not isinstance(alpha_ll_max_size_in_bytes, int) or not isinstance(cache_line_size_log, int) \
 			or not isinstance(landlord_size_log, int) or not isninstance(cache_line_size_log, int):
 			raise ValueError("All values must be integers")
 		self.domain_log = domain_log
-		self.landlord_base_ptr = ll_base_ptr
+		self.landlord_base_ptr = landlord_base_ptr
 		self.alpha_ll_size_log = clog2(alpha_ll_max_size_in_bytes)
-		self.program_cache_line_size_log = cache_line_size_log
-		
-		self.kernel_base_addr = kernel_base_addr
 
+		self.program_cache_line_size_log = cache_line_size_log
 		#: landlord cache line size is set to match the program's one
 		#: in order to ease implementation
 		self.landlord_cache_line_size_log = self.program_cache_line_size_log
 		self.landlord_size_log = landlord_size_log
 		assert (self.landlord_base_ptr % (2**self.program_cache_line_size_log) == 0)
-		# assert (self.landlord_base_ptr % (2**self.landlord_cache_line_size_log) == 0)
+		assert (self.landlord_base_ptr % (2**self.landlord_cache_line_size_log) == 0)
 
 		#: how many landlords are in cache line
 		self.landlord_cache_line_capacity_log = \
@@ -174,12 +176,14 @@ class LandlordConverter():
 				"alpha layer size log",
 				self.getAlphaLayerSize(),
 				"alpha layer max size log",
-				alpha_ll_max_size_in_bytes
+				alpha_ll_max_size_in_bytes,
 				)
 			)
 		self.landlordLayersCount = self._calcLandlordLayersCount()
 
 		assert  (2**self.domain_log >= self.landlord_base_ptr + self.tree_size)
+
+		self.kernel_base_addr = kernel_base_addr
 		# if self.kernel_base_addr is None:
 		# 	self.kernel_base_addr = 2**(self.domain_log - 1)
 		if self.kernel_base_addr is not None:
@@ -197,8 +201,9 @@ class LandlordConverter():
 		elif (self.signature_size_in_bits == 0):
 			logging.warning("No signature")
 			raise ValueError("signature size must be greater than zero")
-		if ((self.signature_size_in_bits // 8) > \
-			2**min(self.program_cache_line_size_log, self.landlord_cache_line_size_log)):
+		if ((self.signature_size_in_bits // 8) > (
+			2**min(self.program_cache_line_size_log,
+				   self.landlord_cache_line_size_log))):
 			raise ValueError("signature size ({}b) is too small".format(self.signature_size_in_bits))
 
 	def __str__(self) -> str:
@@ -433,6 +438,3 @@ class LandlordConverter():
 #end of class LandlordConverter
 
 LLConvType = typing.NewType("LLConvType", LandlordConverter)
-
-c30 = LandlordConverter(30, 2**6, 5, 1, 8, ll_base_ptr=0x20000000) # 32-bit address
-c39 = LandlordConverter(39, 2**6, 6, 2, 16, ll_base_ptr=0x200000000) # 64-bit address

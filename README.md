@@ -9,10 +9,10 @@ The **Landlord module** is aimed to encrypt & sign the source code of a restrict
 
 
 To test the module's functionality:
-- from the *Landlord* folder, call `make` to compile the module's CPython code,
+- from the *Landlord* folder, call `make` to compile the module's C extenstions,
 - either place an executable in *Landlord/tst*, or simply call `make test`, and,
 - execute *./sample.py [executable path]*.
 
 #### Notes
-- Requirements: Built for 64-bit machine running Linux with Python v3.5
+- Built for Ubuntu 16.04.3 64-bit with Python v3.5, nasm and pip3
 - The Secure Machine doesn't support dynamically linked files, therefore, in order to witness the full functionality of the module, one has to execute the sample code with executables compiled using `--static` flag.

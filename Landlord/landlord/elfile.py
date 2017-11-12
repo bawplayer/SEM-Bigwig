@@ -2,20 +2,19 @@
 __author__ = "bawplayer"
 
 # standard library
-from collections import namedtuple
-import typing
 from enum import IntEnum
-import logging
+from collections import namedtuple
 from contextlib import suppress
+import logging
 from sys import stderr
+import typing
 
 import elfexmod
 from landlord import converter
 
 
 def getEnumNameMatch(enumclass, val):
-	"""Returns the first value.
-	"""
+	"""Returns the first value."""
 	for e in enumclass:
 		if e.value == val:
 			return e.name
@@ -62,7 +61,7 @@ class Elfile:
 			try:
 				self.address, self.length = elfexmod.mmapAlloc(self, writeflag=writable)
 			except:
-				logging.debug("Inner function failed.\nfiledesc={}".format(self.filedesc))
+				logging.error("Inner function failed.\nfiledesc={}".format(self.filedesc))
 				raise
 			if (self.address == 0):
 				raise IOError("mmap failed")
@@ -78,6 +77,7 @@ class Elfile:
 			return self.length
 
 	def elfIsValid(barray:typing.Union[bytes, bytearray]) -> bool:
+
 		"""Validates the file's magic number.
 		"""
 		mnumber = b'\x7fELF'
@@ -100,7 +100,7 @@ class Elfile:
 			return elfexmod.sign(content.rjust(padding_length, b'\0'), cacheline_width, sign_width)
 		return elfexmod.signBytesArray(content, cacheline_width, sign_width)
 
-	def __init__(self, filename:str, *, writable:bool=True):
+	def __init__(self, filename:str, writable:bool=True):
 		if not writable:
 			raise NotImplementedError("file must be writable")
 		self.srcfilename = filename
@@ -130,8 +130,7 @@ class Elfile:
 		pass
 
 	def __len__(self):
-		"""Returns the file's length.
-		"""
+		"""Returns the file's length."""
 		return len(self._srcmm)
 
 	def __str__(self):
@@ -145,7 +144,7 @@ class Elfile:
 				return getEnumNameMatch(Elfile.FileTypes, hdrdict["type"])
 
 		strargs = list()
-		with suppress(Exception):
+		with suppress(AttributeError):
 			strargs.append(basename(self.srcfilename))
 			hdrdict = self.readHeader()
 			strargs[0] += " ({})".format(_getFileTypeStr(hdrdict["type"]))
@@ -166,8 +165,7 @@ class Elfile:
 		return "\n".join(strargs)
 
 	def __bool__(self):
-		"""Revarifies the header.
-		"""
+		"""Revarifies the header."""
 		return (len(self) > 0) and elfexmod.checkValidity(self)
 
 	def isExecutable(self) -> bool:
@@ -182,14 +180,15 @@ class Elfile:
 		return elfexmod.isStaticallyLinkedExecutable(self)
 
 	def _setEncryptedAttribute(self) -> bool:
-		"""Marks the file as encrypted and returns the *original* state.
+		"""Marks the file as encrypted.
+
+		:returns: the former encryption state.
 		"""
 		assert self.writable, "File is set for read mode"
 		return elfexmod.markEncrypted(self)
 
 	def getEncryptedAttribute(self) -> bool:
-		"""Returns current encryption state.
-		"""
+		"""Returns current encryption state."""
 		return elfexmod.isEncrypted(self)
 
 	def trimSectionTable(self, clonename):
@@ -289,7 +288,6 @@ class Elfile:
 		"""Nullify bytes in the file which have no virtual address
 		attached to them.
 		"""
-		from collections import namedtuple
 		Domain = namedtuple("Domain", ["base", "size"])
 		def _groupInDomains(offsets:typing.List[int]):
 			domains = []

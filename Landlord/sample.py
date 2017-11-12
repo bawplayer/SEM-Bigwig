@@ -1,66 +1,48 @@
 #!/usr/bin/env python3
-#__author__ = "bawplayer"
+# __author__ = "bawplayer"
 # EXECUTE FROM THE TOP DIRECTORY
 
-# standard library
-import sys
-import os.path
+import contextlib
+import functools
+import json
 import logging
+import os.path
+import sys
 import typing
 
-from landlord import elfile as elfi
+from landlord import command_parser
 from landlord import converter
+from landlord import elfile
+from tests import utils as test_utils
+from tests import sanity as test_sanity
 
-def time_deco(func):
-	from functools import wraps
-	@wraps(func)
-	def td_wrapper(*args, **kwargs):
-		from datetime import datetime
-		start = datetime.now()
-		res = func(*args, **kwargs)
-		end = datetime.now()
-		logging.info("Time delta is: {}".format(end-start))
-		return res
-	return td_wrapper
+# 32-bit address landlord converter example
+conv30 = converter.LandlordConverter(
+	domain_log=30,
+	alpha_ll_max_size_in_bytes=2**6,
+	cache_line_size_log=5,
+	landlord_size_log=1,
+	signature_size_in_bits=8,
+	landlord_base_ptr=0x20000000)
 
-@time_deco
-def test1(filename, conver:converter.LLConvType, *, ignoreBlankLandlords:bool=True):
-	"""Call :py:func:`Elfile.generateLandlords()` to
-	calculate the file's landlords.
-	"""
-	with elfi.Elfile(filename) as fle:
-		print(fle)
-		# fle.readHeader()
-		# fle.readSegmentTable()
-		if fle.isStaticallyLinkedExec():
-			print("""----------------------------------------------""")
-			landlordsDict = fle.generateLandlords(conver,
-				ignoreBlankLandlords=ignoreBlankLandlords)
-			for k in sorted(list(landlordsDict)):
-				print("{key:#X} : {val:#{width}X}\t(refers to: {srcaddr:#X})".format(
-					key=k, val=landlordsDict[k],
-					width = (conver.signature_size_in_bits // 4),
-					srcaddr = conver.getAddressFromLandlordAddress(k)))
-		print("""----------------------------------------------""")
+# 64-bit address landlord converter example
+conv39 = converter.LandlordConverter(
+	domain_log=39,
+	alpha_ll_max_size_in_bytes=2**6,
+	cache_line_size_log=6,
+	landlord_size_log=2,
+	signature_size_in_bits=16,
+	landlord_base_ptr=0x200000000)
 
-@time_deco
-def test2(filename, conver:converter.LLConvType):
-	"""Call :py:func:`Elfile.encrypt`.
-	"""
-	with elfi.Elfile(filename) as fle:
-		if fle.isStaticallyLinkedExec():
-			print("Successfully cloned to: {}".format(fle.encrypt(conver)))
-
-@time_deco
+@test_utils.time_deco
 def dumpLandlordsToFile(srcfile, destfile, conver:converter.LLConvType,
-	overrideDestination:bool=True, *, ignoreBlankLandlords:bool=True):
+	overrideDestination:bool=True, ignoreBlankLandlords:bool=True):
 	"""Dump the landlords addresses and values using JSON.
 	By default, overrides destfile when exists.
 	"""
-	import json
 	if (not overrideDestination) and os.path.exists(destfile):
 		raise FileExistsError("destination file already exitsts")
-	with elfi.Elfile(srcfile) as fle:
+	with elfile.Elfile(srcfile) as fle:
 		if not fle.isStaticallyLinkedExec():
 			raise ValueError("Source file is not statically linked executable")
 		landlordsDict = fle.generateLandlords(conver,
@@ -68,23 +50,44 @@ def dumpLandlordsToFile(srcfile, destfile, conver:converter.LLConvType,
 		with open(destfile, 'w') as dest:
 			json.dump(landlordsDict, dest, sort_keys=True, indent=3)
 
-def main(*filenames, conver=converter.c30):
-	form = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(levelname)s:%(message)s";\
-	logging.basicConfig(format=form, level=logging.DEBUG)
-	logging.debug(str(conver))
-	
+
+def call_tests(*filenames, conver=conv30):
 	if not filenames:
 		fname = os.path.join("tst", "tiny.out")
 		if os.path.exists(fname):
 			filenames = [fname,]
 
-	for arg in filenames:
-		if not os.path.isfile(arg):
-			print("Test file {} is not found".format(arg), file=sys.stderr)
-			continue
-		test1(arg, conver)
-		test2(arg, conver)
+	if not filenames:
+		print("Nothing to do", file=sys.stderr)
+		return
 
+	for fn in filenames:
+		if not os.path.isfile(fn):
+			print("File {} is not found".format(fn), file=sys.stderr)
+			continue
+		i = 0
+		while True:
+			i += 1  # 1st index equals 1
+			try:
+				getattr(test_sanity, "test%d" % i)(fn, conver)
+			except AttributeError:
+				break
+
+def main():
+	form = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(levelname)s:%(message)s"
+	logging.basicConfig(format=form, level=logging.DEBUG)
+
+	args = command_parser.get_parser().parse_args()
+	curr_converter = converter.LandlordConverter(
+		domain_log=args.address_width,
+		alpha_ll_max_size_in_bytes=args.alpha_size,
+		cache_line_size_log=converter.clog2(args.cache_line_size),
+		landlord_size_log=converter.clog2(args.landlord_size),
+		signature_size_in_bits=args.signature_size,
+		landlord_base_ptr=args.landlord_base_address,
+		)
+	logging.info(str(curr_converter))
+	call_tests(*args.filenames, conver=curr_converter)
 
 if __name__ == "__main__":
-	main(*sys.argv[1:])
+	main()
